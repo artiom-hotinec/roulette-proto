@@ -271,6 +271,27 @@ describe('BetSlip: undo', () => {
     expectState(slip, [bet(straight(17), '10000')], '10000')
   })
 
+  it('skips chips refused by the total limit or for a malformed amount', () => {
+    const slip = new BetSlip()
+    for (const n of range(1, 10)) place(slip, straight(n), credits(100)) // total 1000
+    expectRefused(slip.addChip(straight(11), credits(1))) // over the total
+    expect(takes(slip, straight(11), '0')).toBe(false) // malformed
+    slip.undo() // must take back the chip on 10, not a refused action
+    expectState(
+      slip,
+      range(1, 9).map((n) => bet(straight(n), '10000')),
+      '90000',
+    )
+  })
+
+  it('skips a double refused by the total limit', () => {
+    const slip = new BetSlip()
+    for (const n of range(1, 11)) place(slip, straight(n), credits(25), credits(25)) // 550
+    expectRefused(slip.double()) // 1100 is over the total; every bet stays within 100
+    slip.undo() // must take back the last 25 on 11
+    expect(slip.totalStakeMinor()).toBe('52500')
+  })
+
   it('skips clear and double on an already empty slip', () => {
     const slip = new BetSlip()
     place(slip, straight(17), credits(5))
