@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Roulette table: a playable roulette wheel and betting UI prototype in the browser. Vite + React + TypeScript + Pixi.js v8, npm. Currently still the stock Vite template (`src/App.tsx`).
+Roulette table: a playable roulette wheel and betting UI prototype in the browser. Vite + React + TypeScript + Pixi.js v8, npm. Code: `src/table` (layout), `src/model` (bet slip), `src/view` (Pixi table), `src/ui` (React controls, labels, chips).
 
 ## How you work
 
