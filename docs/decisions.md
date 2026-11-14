@@ -65,3 +65,65 @@ The tests derive their types from these exports (`ReturnType`, `Parameters`), so
   - A corner touches all four of its numbers.
   - A split, street, corner or line touches at least one of its own numbers, and no straight-up cell outside them.
 - **Table**: European single zero. The splits 0/1, 0/2 and 0/3 exist. Trios and the basket (bets that include zero) are not part of the table.
+
+## 2026-11-13: Implementation
+
+### Structure
+
+- `src/model/bet.ts`: the shared `BetType` and `BetSpot` types.
+- `src/table/layout.ts`: geometry. `src/model/betSlip.ts`: bets and limits. Both are pure TypeScript.
+- `src/view/`: the Pixi table (`TableCanvas.tsx`, `TableView.ts`, `ChipLayer.ts`, `projection.ts`, `design.ts`).
+- `src/ui/`: React controls (`Controls.tsx`), bet and felt labels (`labels.ts`), chip values and colours (`chips.ts`).
+- **Split**: Pixi draws the table, chips, hover highlight and tooltip. React DOM draws the chip tray, the total, the
+  error and the CLEAR / UNDO / DOUBLE buttons.
+
+### Table layout
+
+- Generated in loops from `TABLE_CONFIG`: 56 px number cells and 12 px strips between them. The origin is the
+  top-left of the zero cell.
+- Split and corner zones live in the strips. The strip row under 1, 4 … 34 holds the streets (under a cell) and the
+  lines (under a vertical strip). Two outside rows of 44 px: the dozens, then 1-18 / EVEN / RED / BLACK / ODD / 19-36.
+- Gaps between outside bets, and between 34–36 and "2 to 1", are dead space (`hitTest` returns `null`).
+- **`hitTest` tie rule**: smallest area wins; among equal areas the smaller `rect.x`, then the smaller `rect.y`. Ties
+  happen only where a zero split meets a horizontal split or the street 1/2/3.
+
+### Perspective view
+
+- The flat layout is drawn once in table coordinates (`TABLE_ART`) and baked to a texture at resolution 2. A
+  `PerspectiveMesh` maps it onto `TABLE_QUAD`, in a 1280×600 design space (`design.ts`). The design space is scaled
+  uniformly to fit the window and centred.
+- One homography (`projection.ts`) serves everything. It projects chips, the highlight and the tooltip. It also
+  unprojects the pointer to table coordinates for `hitTest`, so hit testing stays on the flat, axis-aligned rects
+  the tests check.
+- Overlays (`eventMode = 'none'`) never hit test; the table's hit area is the `TABLE_QUAD` polygon.
+- Input: left click places the selected chip; Shift+click or right click removes the last chip on the spot. The
+  browser menu is suppressed on the table.
+
+### Bet slip
+
+- Each spot keeps its list of chips (`bigint`, minor units). The key is `type` plus the numbers sorted ascending, and
+  the slip stores the sorted numbers.
+- `double()` appends a copy of each spot's chips, so a removal after DOUBLE takes one chip off. On an empty slip it
+  returns `{ ok: true }` and records nothing.
+- Error texts: `Each bet position is limited to N credits.` and `Total bet is limited to N credits.` (N formatted from
+  the limit). A malformed amount gets `Chip amount must be a positive whole number of minor units`.
+- In the UI an error stays until an action that changes the slip, or 4 s. An action that changes nothing (UNDO with
+  no history, removing from an empty spot) keeps it.
+
+### Chips, labels, tooltip
+
+- A bet's amount is shown as a greedy stack of chip values (100, 25, 10, 5, 1); the top chip shows the total.
+- Chip width is 1.1 × the projected cell width, height 0.6 × width. T9 asked for about 70 % of the cell; at that size
+  the labels were unreadable, so the orchestrator enlarged them.
+- Tooltip names: `Straight 17`, `Split 17/18`, `Corner 26/27/29/30`, `3rd Column`, `2nd Dozen`, `Red`, `19-36`.
+  Felt labels: `2 to 1`, `2nd 12`, `EVEN`, `1-18`.
+- The tooltip is centred on the zone horizontally and sits above every highlighted quad under its width, so it never
+  covers the highlight. For bets spread over the table (Red, Even …) it sits above the table.
+
+### Tooling
+
+- `tsconfig.app.json` includes `acceptance`, so `npm run build` type-checks the tests.
+- Dev only: `window.__roulette.zoneCenter(type, numbers)` returns a zone's centre in client coordinates, for browser
+  checks.
+- The user approved two extra tests in `acceptance/betSlip.test.ts` (undo skips chips refused by the total limit or a
+  malformed amount; undo skips a DOUBLE refused by the total limit). There are 98 tests in all.
