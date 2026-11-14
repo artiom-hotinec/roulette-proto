@@ -1,122 +1,59 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import { useEffect, useState } from 'react'
+import { BetSlip } from './model/betSlip.ts'
+import type { SlipResult } from './model/betSlip.ts'
+import type { TableZone } from './table/layout.ts'
+import Controls from './ui/Controls.tsx'
+import TableCanvas from './view/TableCanvas.tsx'
 
-function App() {
-  const [count, setCount] = useState(0)
+// 1 credit; the chip selected at start.
+const DEFAULT_CHIP = '100'
+const ERROR_MS = 4000
+
+const snapshot = (slip: BetSlip) => ({ bets: slip.toBets(), totalMinor: slip.totalStakeMinor() })
+
+export default function App() {
+  const [slip] = useState(() => new BetSlip())
+  const [selectedChip, setSelectedChip] = useState(DEFAULT_CHIP)
+  const [shown, setShown] = useState(() => snapshot(slip))
+  // An object, so that a repeated refusal with the same text restarts the timer.
+  const [error, setError] = useState<{ message: string } | null>(null)
+
+  useEffect(() => {
+    if (!error) return
+    const timer = setTimeout(() => setError(null), ERROR_MS)
+    return () => clearTimeout(timer)
+  }, [error])
+
+  // Runs one slip action, then shows the slip as it is now. A refusal shows its error, an action that
+  // changed the slip clears it, and an action that changed nothing keeps the current error.
+  // Every change the slip records alters the total stake, so comparing totals detects a change.
+  const act = (action: () => SlipResult | void) => {
+    const totalBefore = slip.totalStakeMinor()
+    const result = action()
+    setShown(snapshot(slip))
+    if (result && !result.ok) {
+      setError({ message: result.error })
+    } else if (slip.totalStakeMinor() !== totalBefore) {
+      setError(null)
+    }
+  }
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+    <div className="game">
+      <TableCanvas
+        bets={shown.bets}
+        onPlace={(zone: TableZone) => act(() => slip.addChip(zone, selectedChip))}
+        onRemove={(zone: TableZone) => act(() => slip.removeChip(zone))}
+      />
+      <Controls
+        selectedChip={selectedChip}
+        onSelectChip={setSelectedChip}
+        onClear={() => act(() => slip.clear())}
+        onUndo={() => act(() => slip.undo())}
+        onDouble={() => act(() => slip.double())}
+        totalMinor={shown.totalMinor}
+        error={error?.message ?? null}
+      />
+    </div>
   )
 }
-
-export default App
